@@ -1,0 +1,226 @@
+:root {
+  --app-font: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans',
+    'Liberation Sans', sans-serif;
+  --page-bg: radial-gradient(circle at 12% 18%, rgba(86, 230, 255, 0.16), transparent 18%),
+    radial-gradient(circle at 82% 14%, rgba(116, 176, 255, 0.16), transparent 15%),
+    linear-gradient(180deg, #102447 0%, #09162f 48%, #07101f 100%);
+  --shell-text: #f8fbff;
+  --shell-muted: #a6bdd7;
+  --shell-accent: #3fd9ff;
+  --card-surface: linear-gradient(180deg, rgba(26, 42, 76, 0.7) 0%, rgba(12, 24, 48, 0.58) 100%);
+  --card-border: rgba(145, 245, 255, 0.5);
+  --card-shadow: 0 16px 34px rgba(1, 10, 30, 0.28), 0 0 34px rgba(95, 234, 255, 0.24),
+    inset 0 1px 0 rgba(236, 252, 255, 0.2);
+  --nav-bg: rgba(10, 20, 40, 0.92);
+  --nav-border: rgba(101, 227, 255, 0.2);
+  --nav-active: rgba(70, 203, 255, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--app-font);
+  color: var(--shell-text);
+  background: var(--page-bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS: inputs must be >=16px to avoid the auto-zoom on focus */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  min-height: calc(52px + env(safe-area-inset-top));
+  background: var(--nav-bg);
+  backdrop-filter: blur(22px) saturate(140%);
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.app-topbar h1 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+.app-topbar .sub {
+  font-size: 12px;
+  color: var(--shell-muted);
+  margin: 0;
+}
+
+.app-content {
+  flex: 1;
+  padding: 14px 14px 20px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.glass-card {
+  background: var(--card-surface);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(22px) saturate(140%);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--shell-muted);
+  margin: 0 0 10px;
+}
+
+/* Bottom tab navigation — mirrors qlsx-admin mobile shell */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--nav-bg);
+  backdrop-filter: blur(22px) saturate(140%);
+  border-top: 1px solid var(--nav-border);
+}
+
+.bottom-nav .nav-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--shell-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.bottom-nav .nav-tab .nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.bottom-nav .nav-tab .nav-label {
+  line-height: 1;
+}
+
+.bottom-nav .nav-tab.active {
+  color: var(--shell-text);
+  background: var(--nav-active);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.22);
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  color: #07101f;
+}
+
+.empty-hint {
+  text-align: center;
+  color: var(--shell-muted);
+  padding: 28px 12px;
+  font-size: 13px;
+}
+
+.pair-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(145, 245, 255, 0.12);
+}
+
+.pair-row:last-child {
+  border-bottom: none;
+}
+
+.vs-chip {
+  font-weight: 800;
+  color: var(--shell-accent);
+  font-size: 12px;
+}
+
+.score-big {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-medal {
+  font-size: 22px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* hàng cặp đi tiếp trong BXH bảng */
+.qualify-row > td {
+  background: rgba(70, 203, 255, 0.12) !important;
+}
+.qualify-row > td:first-child {
+  box-shadow: inset 3px 0 0 var(--shell-accent);
+}
