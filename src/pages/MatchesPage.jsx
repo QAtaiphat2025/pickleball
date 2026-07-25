@@ -7,7 +7,7 @@ import {
   CheckCircleFilled,
   ApartmentOutlined,
 } from '@ant-design/icons'
-import { useActive, updateTournament } from '../store'
+import { useActive, useAuth, updateTournament } from '../store'
 import {
   scheduleRoundRobin,
   scheduleKnockout,
@@ -31,6 +31,7 @@ export default function MatchesPage() {
   const { modal, message } = AntApp.useApp()
   const t = useActive()
   const [draft, setDraft] = useState({}) // matchId -> {a,b}
+  const canEdit = useAuth().unlocked
 
   if (!t) {
     return (
@@ -171,9 +172,11 @@ export default function MatchesPage() {
             Chưa có lịch thi đấu.<br />
             Thể thức: <b>{formatDesc}</b>
           </div>
-          <Button type="primary" icon={<ThunderboltOutlined />} onClick={genSchedule} block>
-            Tạo lịch thi đấu ({pairs.length} cặp)
-          </Button>
+          {canEdit && (
+            <Button type="primary" icon={<ThunderboltOutlined />} onClick={genSchedule} block>
+              Tạo lịch thi đấu ({pairs.length} cặp)
+            </Button>
+          )}
         </div>
       </>
     )
@@ -203,28 +206,34 @@ export default function MatchesPage() {
         </div>
 
         {bothPresent ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <InputNumber
-              min={0}
-              max={99}
-              placeholder="0"
-              value={d.a ?? m.scoreA}
-              onChange={(v) => setDraftVal(m.id, 'a', v)}
-              style={{ flex: 1 }}
-            />
-            <span style={{ color: 'var(--shell-muted)' }}>–</span>
-            <InputNumber
-              min={0}
-              max={99}
-              placeholder="0"
-              value={d.b ?? m.scoreB}
-              onChange={(v) => setDraftVal(m.id, 'b', v)}
-              style={{ flex: 1 }}
-            />
-            <Button type="primary" onClick={() => saveScore(m)}>
-              Lưu
-            </Button>
-          </div>
+          canEdit ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <InputNumber
+                min={0}
+                max={99}
+                placeholder="0"
+                value={d.a ?? m.scoreA}
+                onChange={(v) => setDraftVal(m.id, 'a', v)}
+                style={{ flex: 1 }}
+              />
+              <span style={{ color: 'var(--shell-muted)' }}>–</span>
+              <InputNumber
+                min={0}
+                max={99}
+                placeholder="0"
+                value={d.b ?? m.scoreB}
+                onChange={(v) => setDraftVal(m.id, 'b', v)}
+                style={{ flex: 1 }}
+              />
+              <Button type="primary" onClick={() => saveScore(m)}>
+                Lưu
+              </Button>
+            </div>
+          ) : (
+            <div className="score-big" style={{ textAlign: 'center' }}>
+              {done ? `${m.scoreA} – ${m.scoreB}` : <span style={{ fontSize: 12, color: 'var(--shell-muted)', fontWeight: 400 }}>Chưa có tỉ số</span>}
+            </div>
+          )
         ) : (
           <div style={{ fontSize: 12, color: 'var(--shell-muted)' }}>Chờ kết quả vòng trước</div>
         )}
@@ -257,9 +266,11 @@ export default function MatchesPage() {
             <div className="section-title" style={{ margin: 0 }}>
               Vòng bảng · {groups.length} bảng · {groupMatches.length} trận
             </div>
-            <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
-              Chia lại
-            </Button>
+            {canEdit && (
+              <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
+                Chia lại
+              </Button>
+            )}
           </div>
         </div>
 
@@ -282,20 +293,22 @@ export default function MatchesPage() {
         })}
 
         {/* chốt vòng bảng → tạo nhánh */}
-        <div className="glass-card">
-          {!groupDone ? (
-            <div className="empty-hint">Nhập đủ tỉ số các bảng để mở nhánh loại trực tiếp.</div>
-          ) : (
-            <Button
-              type="primary"
-              icon={<ApartmentOutlined />}
-              onClick={buildBracket}
-              block
-            >
-              {hasKnockout ? 'Bốc lại nhánh knockout' : 'Chốt vòng bảng → Tạo nhánh knockout'}
-            </Button>
-          )}
-        </div>
+        {(canEdit || !groupDone) && (
+          <div className="glass-card">
+            {!groupDone ? (
+              <div className="empty-hint">Nhập đủ tỉ số các bảng để mở nhánh loại trực tiếp.</div>
+            ) : (
+              <Button
+                type="primary"
+                icon={<ApartmentOutlined />}
+                onClick={buildBracket}
+                block
+              >
+                {hasKnockout ? 'Bốc lại nhánh knockout' : 'Chốt vòng bảng → Tạo nhánh knockout'}
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* cây knockout */}
         {koRounds.map((g) => (
@@ -324,9 +337,11 @@ export default function MatchesPage() {
           <div className="section-title" style={{ margin: 0 }}>
             {isKnockout ? 'Nhánh loại trực tiếp' : 'Vòng tròn'} · {matches.length} trận
           </div>
-          <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
-            Tạo lại
-          </Button>
+          {canEdit && (
+            <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
+              Tạo lại
+            </Button>
+          )}
         </div>
       </div>
 

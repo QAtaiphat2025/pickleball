@@ -217,6 +217,14 @@ select {
   gap: 10px;
 }
 
+/* nút khoá/đăng nhập nổi góc trên phải, trên cả topbar sticky */
+.auth-control {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  z-index: 70;
+}
+
 /* hàng cặp đi tiếp trong BXH bảng */
 .qualify-row > td {
   background: rgba(70, 203, 255, 0.12) !important;

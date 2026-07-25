@@ -7,7 +7,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
-import { useActive, updateTournament } from '../store'
+import { useActive, useAuth, updateTournament } from '../store'
 import {
   pairByLevel,
   pairRandom,
@@ -29,6 +29,7 @@ export default function PairingPage() {
   const [mode, setMode] = useState('level')
   const [selA, setSelA] = useState(null)
   const [selB, setSelB] = useState(null)
+  const canEdit = useAuth().unlocked
 
   if (!t) {
     return (
@@ -137,13 +138,14 @@ export default function PairingPage() {
           <h1>Phân cặp</h1>
           <p className="sub">{pairs.length} cặp · {freeAthletes.length} VĐV chưa ghép</p>
         </div>
-        {pairs.length > 0 && (
+        {canEdit && pairs.length > 0 && (
           <Button danger icon={<DeleteOutlined />} onClick={clearAll}>
             Xoá hết
           </Button>
         )}
       </div>
 
+      {canEdit && (
       <div className="glass-card">
         <div className="section-title">Chế độ</div>
         <Segmented block value={mode} onChange={setMode} options={MODES} />
@@ -193,6 +195,7 @@ export default function PairingPage() {
           </Button>
         )}
       </div>
+      )}
 
       <div className="glass-card">
         <div className="section-title">Danh sách cặp</div>
@@ -220,13 +223,15 @@ export default function PairingPage() {
                   )
                 })}
               </div>
-              <Button
-                type="text"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                onClick={() => removePair(p.id)}
-              />
+              {canEdit && (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => removePair(p.id)}
+                />
+              )}
             </div>
           ))
         )}

@@ -6,7 +6,7 @@ import {
   DeleteOutlined,
   ImportOutlined,
 } from '@ant-design/icons'
-import { useActive, updateTournament, uid } from '../store'
+import { useActive, useAuth, updateTournament, uid } from '../store'
 import { LEVELS } from '../logic'
 import { LEVEL_COLORS } from '../theme'
 
@@ -26,6 +26,7 @@ export default function AthletesPage() {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
   const [bulkLevel, setBulkLevel] = useState('B')
+  const canEdit = useAuth().unlocked
 
   if (!t) {
     return (
@@ -35,7 +36,7 @@ export default function AthletesPage() {
     )
   }
 
-  const locked = t.paired
+  const paired = t.paired
   const athletes = t.athletes
 
   const add = () => {
@@ -49,10 +50,39 @@ export default function AthletesPage() {
   }
 
   const remove = (id) => {
-    updateTournament(t.id, (cur) => ({
-      ...cur,
-      athletes: cur.athletes.filter((a) => a.id !== id),
-    }))
+    const inPair = t.pairs.some((p) => p.players.includes(id))
+    const doRemove = () =>
+      updateTournament(t.id, (cur) => {
+        const nextPairs = cur.pairs.filter((p) => !p.players.includes(id))
+        const pairsChanged = nextPairs.length !== cur.pairs.length
+        return {
+          ...cur,
+          athletes: cur.athletes.filter((a) => a.id !== id),
+          pairs: nextPairs,
+          paired: nextPairs.length > 0,
+          // phá cặp → lịch thi đấu không còn hợp lệ, xoá đi
+          ...(pairsChanged
+            ? {
+                scheduled: false,
+                matches: [],
+                groups: [],
+                stage: cur.format === 'group-knockout' ? 'group' : null,
+              }
+            : {}),
+        }
+      })
+    if (inPair) {
+      modal.confirm({
+        title: 'Xoá VĐV đang trong cặp?',
+        content: 'Cặp chứa VĐV này sẽ bị phá và lịch thi đấu bị xoá.',
+        okText: 'Xoá',
+        okButtonProps: { danger: true },
+        cancelText: 'Huỷ',
+        onOk: doRemove,
+      })
+    } else {
+      doRemove()
+    }
   }
 
   const changeLevel = (id, lv) => {
@@ -91,20 +121,22 @@ export default function AthletesPage() {
           <h1>{t.name}</h1>
           <p className="sub">{athletes.length} vận động viên</p>
         </div>
-        <Button icon={<ImportOutlined />} onClick={() => setBulkOpen(true)} disabled={locked}>
-          Dán
-        </Button>
+        {canEdit && (
+          <Button icon={<ImportOutlined />} onClick={() => setBulkOpen(true)}>
+            Dán
+          </Button>
+        )}
       </div>
 
-      {locked && (
+      {canEdit && paired && (
         <div className="glass-card" style={{ borderColor: 'var(--shell-accent)' }}>
           <div style={{ fontSize: 13, color: 'var(--shell-muted)' }}>
-            Giải đã phân cặp — danh sách VĐV bị khoá. Xoá cặp ở tab Phân cặp để sửa lại.
+            Giải đã phân cặp. Thêm VĐV mới rồi qua tab Phân cặp để ghép; xoá VĐV đang trong cặp sẽ phá cặp và xoá lịch thi đấu.
           </div>
         </div>
       )}
 
-      {!locked && (
+      {canEdit && (
         <div className="glass-card">
           <div className="section-title">Thêm VĐV</div>
           <div className="stack">
@@ -160,7 +192,7 @@ export default function AthletesPage() {
                 <span style={{ color: 'var(--shell-muted)', width: 22, fontSize: 13 }}>{i + 1}</span>
                 <LevelBadge level={a.level} />
                 <span style={{ flex: 1, fontWeight: 600 }}>{a.name}</span>
-                {!locked && (
+                {canEdit && (
                   <>
                     <Segmented
                       size="small"
