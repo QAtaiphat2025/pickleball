@@ -58,7 +58,8 @@ select {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  /* chừa chỗ bên phải cho nút đăng nhập/quản trị nổi (.auth-control) */
+  padding: calc(10px + env(safe-area-inset-top)) calc(var(--auth-slot-w, 104px) + 32px) 10px 16px;
   min-height: calc(52px + env(safe-area-inset-top));
   background: var(--nav-bg);
   backdrop-filter: blur(22px) saturate(140%);
@@ -70,12 +71,29 @@ select {
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-topbar .sub {
   font-size: 12px;
   color: var(--shell-muted);
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* khối tiêu đề co lại được để chữ ellipsis thay vì đẩy nút hành động */
+.app-topbar > div {
+  min-width: 0;
+}
+
+/* nút hành động của trang (Tạo / Dán / Xoá hết…) không bị bóp méo */
+.app-topbar > button,
+.app-topbar > .ant-btn {
+  flex: 0 0 auto;
 }
 
 .app-content {
@@ -626,11 +644,14 @@ select {
   gap: 10px;
 }
 
-/* nút khoá/đăng nhập nổi góc trên phải, trên cả topbar sticky */
+/* nút khoá/đăng nhập nổi góc trên phải, trên cả topbar sticky.
+   Bám theo mép phải của cột nội dung (max-width 760px) để trên desktop
+   không bị dạt ra sát mép màn hình; .app-topbar chừa sẵn chỗ này bằng
+   biến --auth-slot-w (AuthControl tự đo và cập nhật) nên không đè nút nào. */
 .auth-control {
   position: fixed;
   top: calc(10px + env(safe-area-inset-top));
-  right: 12px;
+  right: calc(max(0px, (100vw - 760px) / 2) + 14px);
   z-index: 70;
 }
 
