@@ -281,6 +281,15 @@ export default function GuideDrawer() {
               nhánh, các cặp đầu bảng được <b>miễn vòng 1 (bye)</b>.
             </li>
             <li>App tự tránh cho 2 cặp cùng bảng gặp lại nhau ngay vòng đầu knockout.</li>
+            <li>
+              Muốn khác ý app? Bấm <b>Tự sắp cặp đấu knockout</b>: bấm một suất rồi bấm suất khác để
+              đổi chỗ, hoặc <b>Xáo trộn</b> để bốc thăm ngẫu nhiên. Bấm <b>Áp dụng</b> là cây trận
+              dựng lại theo đúng thứ tự bạn sắp.
+            </li>
+            <li>
+              Tab <b>BXH</b> hiện tiến trình từng vòng: ai đi tiếp vào tứ kết / bán kết / chung kết,
+              ai bị loại và thua ai.
+            </li>
           </ul>
         </Section>
 

@@ -302,6 +302,13 @@ function byPerformance(x, y) {
   return y.wins - x.wins || y.diff - x.diff || y.pf - x.pf
 }
 
+// Nhãn ngắn cho suất đi tiếp: 'Nhất A' / 'Nhì B' / 'Ba C' (vớt).
+export function seedLabel(seed) {
+  if (!seed) return ''
+  const tierName = seed.tier === 1 ? 'Nhất' : seed.tier === 2 ? 'Nhì' : 'Ba'
+  return `${tierName} ${groupName(seed.groupIndex)}`
+}
+
 // Danh sách cặp đi tiếp, xếp theo seed: nhất bảng trước (mạnh nhất seed 1),
 // rồi nhì bảng, rồi các cặp hạng ba tốt nhất được vớt lên cho đủ nhánh.
 export function knockoutSeeds(groups, pairs, matches, athletes, opts = {}) {
@@ -361,8 +368,35 @@ export function scheduleKnockout(pairs) {
   // → bye rơi vào các seed đầu, không bao giờ có 2 bye cùng 1 trận.
   const order = seedOrder(size)
   const ids = pairs.map((p) => p.id)
-  const seeds = order.map((s) => (s <= n ? ids[s - 1] : null))
+  return buildTreeFromSeeds(order.map((s) => (s <= n ? ids[s - 1] : null)))
+}
 
+// Cây knockout theo đúng thứ tự slot người dùng tự sắp (null = suất trống/bye).
+// slotIds[0] gặp slotIds[1], slotIds[2] gặp slotIds[3]...
+export function scheduleKnockoutFromSlots(slotIds) {
+  const filled = slotIds.filter(Boolean)
+  if (filled.length < 2) return []
+  const size = nextPow2(filled.length)
+  const seeds = Array.from({ length: size }, (_, i) => slotIds[i] || null)
+  return buildTreeFromSeeds(seeds)
+}
+
+// Số slot của vòng 1 cho n cặp (luôn là luỹ thừa của 2).
+export function bracketSlotCount(n) {
+  return n >= 2 ? nextPow2(n) : 0
+}
+
+// Thứ tự slot vòng 1 mặc định theo seed chuẩn — dùng làm điểm khởi đầu
+// cho màn sắp nhánh thủ công.
+export function defaultSlotOrder(pairIds) {
+  const n = pairIds.length
+  if (n < 2) return []
+  const size = nextPow2(n)
+  return seedOrder(size).map((s) => (s <= n ? pairIds[s - 1] : null))
+}
+
+function buildTreeFromSeeds(seeds) {
+  const size = seeds.length
   const rounds = Math.log2(size)
   const matches = []
 
@@ -444,6 +478,73 @@ function propagateByes(matches) {
         if (m.feedInfo.index === 0) parent.a = m.winner
         else parent.b = m.winner
       }
+    }
+  })
+}
+
+// Tên vòng theo khoảng cách tới chung kết.
+export function koRoundName(round, maxRound) {
+  if (round === maxRound) return 'Chung kết'
+  if (round === maxRound - 1) return 'Bán kết'
+  if (round === maxRound - 2) return 'Tứ kết'
+  if (round === maxRound - 3) return 'Vòng 1/8'
+  return `Vòng ${round}`
+}
+
+// Tiến trình nhánh loại trực tiếp: mỗi vòng ai vào, ai đi tiếp, ai bị loại.
+// Trả [{ round, name, nextName, entrants:[pairId], advanced:[pairId],
+//        eliminated:[{pairId, byPairId, score}], pending: n, byes:[pairId] }]
+export function knockoutProgress(koMatches) {
+  const rounds = [...new Set(koMatches.map((m) => m.round))].sort((a, b) => a - b)
+  if (rounds.length === 0) return []
+  const maxRound = rounds[rounds.length - 1]
+  return rounds.map((r) => {
+    const items = koMatches.filter((m) => m.round === r)
+    const entrants = []
+    const advanced = []
+    const eliminated = []
+    const byes = []
+    let pending = 0
+    items.forEach((m) => {
+      if (m.a) entrants.push(m.a)
+      if (m.b) entrants.push(m.b)
+      // bye thật: chỉ có 1 cặp và đã được xử thắng luôn khi bốc nhánh.
+      // Trận vòng sau mới có 1 bên (bên kia chưa xác định) thì vẫn là đang chờ.
+      const alone = (m.a && !m.b) || (!m.a && m.b)
+      if (alone && m.winner) {
+        byes.push(m.a || m.b)
+        advanced.push(m.a || m.b)
+        return
+      }
+      if (!m.a || !m.b) {
+        pending++
+        return
+      }
+      if (!m.winner) {
+        pending++
+        return
+      }
+      advanced.push(m.winner)
+      const loser = m.winner === m.a ? m.b : m.a
+      eliminated.push({
+        pairId: loser,
+        byPairId: m.winner,
+        score:
+          m.scoreA != null && m.scoreB != null
+            ? `${Math.max(m.scoreA, m.scoreB)}–${Math.min(m.scoreA, m.scoreB)}`
+            : null,
+      })
+    })
+    return {
+      round: r,
+      name: koRoundName(r, maxRound),
+      nextName: r < maxRound ? koRoundName(r + 1, maxRound) : null,
+      isFinal: r === maxRound,
+      entrants,
+      advanced,
+      eliminated,
+      byes,
+      pending,
     }
   })
 }

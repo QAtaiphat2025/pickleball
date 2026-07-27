@@ -1,11 +1,21 @@
-import { Empty, App as AntApp, Table, Tag } from 'antd'
-import { OrderedListOutlined, ApartmentOutlined } from '@ant-design/icons'
+import { Empty, Table, Tag } from 'antd'
+import {
+  OrderedListOutlined,
+  ApartmentOutlined,
+  TrophyOutlined,
+  RightCircleOutlined,
+  CloseCircleOutlined,
+} from '@ant-design/icons'
 import { useActive } from '../store'
 import {
   roundRobinStandings,
   knockoutResults,
   computeGroupStandings,
   groupStageComplete,
+  knockoutProgress,
+  knockoutSeeds,
+  seedLabel,
+  pairLabel,
 } from '../logic'
 
 const MEDALS = ['🥇', '🥈', '🥉']
@@ -154,11 +164,136 @@ function StandingTable({ rows, qualifyCount = 0 }) {
   )
 }
 
+// Danh sách cặp đi tiếp từ vòng bảng, kèm nhãn Nhất A / Nhì B / Ba C
+function QualifierList({ t, seeds, labelOf }) {
+  if (!seeds || seeds.length === 0) return null
+  const thirds = seeds.filter((s) => s.tier === 3).length
+  return (
+    <div className="glass-card">
+      <div className="section-title">
+        <TrophyOutlined style={{ marginRight: 6, color: 'var(--shell-accent)' }} />
+        {seeds.length} cặp qua vòng bảng
+      </div>
+      <div className="qual-list">
+        {seeds.map((s, i) => (
+          <div key={s.pairId} className={`qual-row tier-${s.tier}`}>
+            <span className="qual-seed">#{i + 1}</span>
+            <span className="qual-body">
+              <span className="qual-name">{labelOf(s.pairId)}</span>
+              <span className="qual-meta">
+                {s.wins != null ? `${s.wins} thắng` : ''}
+                {s.diff != null ? ` · hiệu số ${s.diff > 0 ? '+' : ''}${s.diff}` : ''}
+              </span>
+            </span>
+            <span className={`qual-tag tier-${s.tier}`}>{seedLabel(s)}</span>
+          </div>
+        ))}
+      </div>
+      {thirds > 0 && (
+        <div className="qual-note">
+          {thirds} cặp hạng ba có thành tích tốt nhất được vớt lên cho đủ nhánh.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Tiến trình nhánh: mỗi vòng ai đi tiếp, ai bị loại
+function KnockoutProgressView({ koMatches, labelOf }) {
+  const rounds = knockoutProgress(koMatches)
+  if (rounds.length === 0) return null
+  return (
+    <div className="glass-card">
+      <div className="section-title">
+        <ApartmentOutlined style={{ marginRight: 6, color: 'var(--shell-accent)' }} />
+        Tiến trình vòng loại trực tiếp
+      </div>
+      <div className="stack" style={{ gap: 12 }}>
+        {rounds.map((r) => (
+          <div key={r.round} className="ko-round">
+            <div className="ko-round-head">
+              <span className="ko-round-name">{r.name}</span>
+              <span className="ko-round-count">{r.entrants.length} cặp</span>
+              {r.pending > 0 && (
+                <Tag color="warning" style={{ marginLeft: 'auto' }}>
+                  còn {r.pending} trận
+                </Tag>
+              )}
+              {r.pending === 0 && (
+                <Tag color="success" style={{ marginLeft: 'auto' }}>
+                  đã xong
+                </Tag>
+              )}
+            </div>
+
+            {r.advanced.length > 0 && (
+              <div className="ko-group">
+                <div className="ko-group-title ok">
+                  <RightCircleOutlined />
+                  {r.isFinal ? 'Vô địch' : `Vào ${r.nextName?.toLowerCase()}`}
+                </div>
+                {r.advanced.map((pid) => (
+                  <div key={pid} className="ko-item ok">
+                    {labelOf(pid)}
+                    {r.byes.includes(pid) && <span className="ko-item-note">miễn vòng này</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {r.eliminated.length > 0 && (
+              <div className="ko-group">
+                <div className="ko-group-title out">
+                  <CloseCircleOutlined />
+                  Bị loại
+                </div>
+                {r.eliminated.map((e) => (
+                  <div key={e.pairId} className="ko-item out">
+                    {labelOf(e.pairId)}
+                    <span className="ko-item-note">
+                      thua {labelOf(e.byPairId)}
+                      {e.score ? ` ${e.score}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {r.advanced.length === 0 && r.eliminated.length === 0 && (
+              <div className="ko-item wait">Chờ kết quả vòng trước</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function GroupKnockoutView({ t }) {
   const groups = t.groups || []
   const groupDone = groupStageComplete(t.matches)
   const koMatches = t.matches.filter((m) => m.stage === 'knockout')
   const hasKnockout = koMatches.length > 0
+
+  const pairMap = Object.fromEntries(t.pairs.map((p) => [p.id, p]))
+  const labelOf = (pid) => (pid && pairMap[pid] ? pairLabel(pairMap[pid], t.athletes) : '—')
+
+  // suất đi tiếp: dùng bản đã chốt lúc bốc nhánh, giải cũ thì tính lại
+  const seeds =
+    t.koSeeds && t.koSeeds.length
+      ? t.koSeeds
+      : hasKnockout && groupDone
+        ? knockoutSeeds(groups, t.pairs, t.matches, t.athletes, {
+            fillWithThirds: t.advanceThirds !== false,
+          }).filter((s) => koMatches.some((m) => m.a === s.pairId || m.b === s.pairId))
+        : []
+
+  // số cặp đi tiếp mỗi bảng để tô sáng đúng (2, hoặc 3 nếu bảng đó có suất vớt)
+  const qualifyIn = (g) => {
+    if (seeds.length === 0) return 2
+    const n = seeds.filter((s) => g.pairIds.includes(s.pairId)).length
+    return n || 2
+  }
 
   // podium từ cây knockout (nếu đã bốc nhánh)
   const koResult = hasKnockout
@@ -174,6 +309,9 @@ function GroupKnockoutView({ t }) {
         </div>
       )}
 
+      {hasKnockout && <KnockoutProgressView koMatches={koMatches} labelOf={labelOf} />}
+      <QualifierList t={t} seeds={seeds} labelOf={labelOf} />
+
       {groups.map((g) => {
         const rows = computeGroupStandings(g, t.pairs, t.matches, t.athletes)
         return (
@@ -185,7 +323,7 @@ function GroupKnockoutView({ t }) {
                 {groupDone ? 'đã xong' : 'đang diễn ra'}
               </Tag>
             </div>
-            <StandingTable rows={rows} qualifyCount={2} />
+            <StandingTable rows={rows} qualifyCount={qualifyIn(g)} />
           </div>
         )
       })}
@@ -193,7 +331,10 @@ function GroupKnockoutView({ t }) {
       {!hasKnockout && (
         <div className="glass-card">
           <div className="empty-hint">
-            2 cặp đầu mỗi bảng (tô sáng) sẽ vào nhánh loại trực tiếp.
+            2 cặp đầu mỗi bảng (tô sáng) sẽ vào nhánh loại trực tiếp
+            {t.advanceThirds !== false
+              ? ', cộng thêm các cặp hạng ba tốt nhất nếu cần cho đủ nhánh.'
+              : '.'}
             {groupDone
               ? ' Sang tab Trận, bấm "Chốt vòng bảng" để bốc nhánh.'
               : ' Nhập đủ tỉ số vòng bảng trước.'}
@@ -207,9 +348,12 @@ function GroupKnockoutView({ t }) {
 function KnockoutView({ t }) {
   const r = knockoutResults(t.pairs, t.matches, t.athletes)
   if (!r) return null
+  const pairMap = Object.fromEntries(t.pairs.map((p) => [p.id, p]))
+  const labelOf = (pid) => (pid && pairMap[pid] ? pairLabel(pairMap[pid], t.athletes) : '—')
   return (
     <>
       <Podium champion={r.champion} runnerUp={r.runnerUp} third={r.third} />
+      <KnockoutProgressView koMatches={t.matches} labelOf={labelOf} />
       {!r.finalDone && (
         <div className="glass-card">
           <div className="empty-hint">

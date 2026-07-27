@@ -6,33 +6,36 @@ import {
   ReloadOutlined,
   CheckCircleFilled,
   ApartmentOutlined,
+  TrophyOutlined,
+  DragOutlined,
 } from '@ant-design/icons'
 import { useActive, useAuth, updateTournament } from '../store'
+import BracketArrange from '../components/BracketArrange'
 import {
   scheduleRoundRobin,
   scheduleKnockout,
+  scheduleKnockoutFromSlots,
+  bracketSlotCount,
   scheduleGroupStage,
   distributeGroups,
   groupStageComplete,
   buildKnockoutFromGroups,
   knockoutSeeds,
+  seedLabel,
+  koRoundName,
   validateScore,
   scoreRuleLabel,
   advanceWinner,
   pairLabel,
 } from '../logic'
 
-const roundName = (round, maxRound) => {
-  if (round === maxRound) return 'Chung kết'
-  if (round === maxRound - 1) return 'Bán kết'
-  if (round === maxRound - 2) return 'Tứ kết'
-  return `Vòng ${round}`
-}
+const roundName = koRoundName
 
 export default function MatchesPage() {
   const { modal, message } = AntApp.useApp()
   const t = useActive()
   const [draft, setDraft] = useState({}) // matchId -> {a,b}
+  const [arrangeOpen, setArrangeOpen] = useState(false)
   const canEdit = useAuth().unlocked
 
   if (!t) {
@@ -54,6 +57,64 @@ export default function MatchesPage() {
   const koMatches = matches.filter((m) => m.stage === 'knockout')
   const groupMatches = matches.filter((m) => m.stage === 'group')
   const hasKnockout = koMatches.length > 0
+
+  // suất đi tiếp đã chốt khi bốc nhánh: pairId -> 'Nhất A' / 'Nhì B' / 'Ba C'.
+  // Giải bốc nhánh từ trước khi có koSeeds thì tính lại từ BXH bảng.
+  const koSeeds =
+    t.koSeeds && t.koSeeds.length
+      ? t.koSeeds
+      : isGroupKO && koMatches.length > 0 && groupStageComplete(matches)
+        ? knockoutSeeds(groups, pairs, matches, t.athletes, {
+            fillWithThirds: t.advanceThirds !== false,
+          }).filter((s) => koMatches.some((m) => m.a === s.pairId || m.b === s.pairId))
+        : []
+  const seedTagOf = Object.fromEntries(koSeeds.map((s) => [s.pairId, seedLabel(s)]))
+  const firstKoRound = hasKnockout ? Math.min(...koMatches.map((m) => m.round || 1)) : 0
+
+  // ----- tự sắp nhánh -----
+  // Các cặp có suất trong nhánh: lấy từ nhánh đang có, chưa bốc thì tính từ BXH bảng.
+  const koTree = isGroupKO ? koMatches : isKnockout ? matches : []
+  const treeFirstRound = koTree.filter((m) => (m.round || 1) === (firstKoRound || 1))
+  const currentSlots =
+    treeFirstRound.length > 0
+      ? [...treeFirstRound]
+          .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+          .flatMap((m) => [m.a || null, m.b || null])
+      : null
+  const arrangePairIds =
+    currentSlots && currentSlots.filter(Boolean).length > 0
+      ? currentSlots.filter(Boolean)
+      : isKnockout
+        ? pairs.map((p) => p.id)
+        : isGroupKO && groupStageComplete(matches)
+          ? knockoutSeeds(groups, pairs, matches, t.athletes, {
+              fillWithThirds: t.advanceThirds !== false,
+            }).map((s) => s.pairId)
+          : []
+  const canArrange = canEdit && bracketSlotCount(arrangePairIds.length) >= 2
+  const koHasScores = koTree.some((m) => m.scoreA != null && m.scoreB != null)
+
+  const applyArrangement = (slotIds) => {
+    const ko = scheduleKnockoutFromSlots(slotIds)
+    if (ko.length === 0) {
+      message.warning('Không đủ cặp để tạo nhánh')
+      return
+    }
+    updateTournament(t.id, (cur) => {
+      if (isGroupKO) {
+        return {
+          ...cur,
+          matches: [
+            ...cur.matches.filter((m) => m.stage === 'group'),
+            ...ko.map((m) => ({ ...m, stage: 'knockout' })),
+          ],
+          stage: 'knockout',
+        }
+      }
+      return { ...cur, matches: ko, scheduled: true }
+    })
+    message.success(`Đã áp dụng nhánh tự sắp · ${ko.filter((m) => m.round === 1).length} trận vòng đầu`)
+  }
 
   const genSchedule = () => {
     if (pairs.length < 2) {
@@ -113,6 +174,16 @@ export default function MatchesPage() {
         ...cur,
         matches: [...cur.matches.filter((m) => m.stage === 'group'), ...ko],
         stage: 'knockout',
+        // lưu lại suất đi tiếp để hiện "Nhất A / Nhì B / Ba C" về sau
+        koSeeds: seeds.map((s) => ({
+          pairId: s.pairId,
+          tier: s.tier,
+          groupIndex: s.groupIndex,
+          rank: s.rank,
+          wins: s.wins,
+          diff: s.diff,
+          pf: s.pf,
+        })),
       }))
       const thirds = seeds.filter((s) => s.tier === 3).length
       message.success(
@@ -196,6 +267,10 @@ export default function MatchesPage() {
     const done = m.scoreA != null && m.scoreB != null
     const d = draft[m.id] || {}
     const bothPresent = m.a && m.b
+    // chỉ vòng knockout đầu tiên mới ghi "Nhất A / Nhì B" — vòng sau là người thắng
+    const showSeed = m.stage === 'knockout' && m.round === firstKoRound
+    const seedA = showSeed ? seedTagOf[m.a] : null
+    const seedB = showSeed ? seedTagOf[m.b] : null
     return (
       <div
         key={m.id}
@@ -204,13 +279,19 @@ export default function MatchesPage() {
           borderBottom: idx < count - 1 ? '1px solid rgba(145,245,255,0.12)' : 'none',
         }}
       >
-        <div className="row-between" style={{ marginBottom: 8 }}>
-          <span style={{ fontWeight: 700, flex: 1 }}>
-            {label(m.a) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+        <div className="row-between" style={{ marginBottom: 8, alignItems: 'flex-start' }}>
+          <span style={{ flex: 1 }}>
+            {seedA && <span className="seed-tag">{seedA}</span>}
+            <span style={{ fontWeight: 700, display: 'block' }}>
+              {label(m.a) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+            </span>
           </span>
           <span className="vs-chip">VS</span>
-          <span style={{ fontWeight: 700, flex: 1, textAlign: 'right' }}>
-            {label(m.b) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+          <span style={{ flex: 1, textAlign: 'right' }}>
+            {seedB && <span className="seed-tag">{seedB}</span>}
+            <span style={{ fontWeight: 700, display: 'block' }}>
+              {label(m.b) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+            </span>
           </span>
         </div>
 
@@ -307,14 +388,62 @@ export default function MatchesPage() {
             {!groupDone ? (
               <div className="empty-hint">Nhập đủ tỉ số các bảng để mở nhánh loại trực tiếp.</div>
             ) : (
-              <Button
-                type="primary"
-                icon={<ApartmentOutlined />}
-                onClick={buildBracket}
-                block
-              >
-                {hasKnockout ? 'Bốc lại nhánh knockout' : 'Chốt vòng bảng → Tạo nhánh knockout'}
-              </Button>
+              <>
+                <Button
+                  type="primary"
+                  icon={<ApartmentOutlined />}
+                  onClick={buildBracket}
+                  block
+                >
+                  {hasKnockout ? 'Bốc lại nhánh knockout' : 'Chốt vòng bảng → Tạo nhánh knockout'}
+                </Button>
+                {canArrange && (
+                  <>
+                    <Button
+                      icon={<DragOutlined />}
+                      onClick={() => setArrangeOpen(true)}
+                      block
+                      style={{ marginTop: 8 }}
+                    >
+                      Tự sắp cặp đấu knockout
+                    </Button>
+                    <div className="empty-hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                      Bốc lại theo BXH bảng, hoặc tự sắp để đổi chỗ cặp đấu theo ý mình.
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* danh sách cặp đi tiếp */}
+        {hasKnockout && koSeeds.length > 0 && (
+          <div className="glass-card">
+            <div className="section-title">
+              <TrophyOutlined style={{ marginRight: 6, color: 'var(--shell-accent)' }} />
+              {koSeeds.length} cặp vào vòng loại trực tiếp
+            </div>
+            <div className="qual-list">
+              {koSeeds.map((s, i) => (
+                <div key={s.pairId} className={`qual-row tier-${s.tier}`}>
+                  <span className="qual-seed">#{i + 1}</span>
+                  <span className="qual-body">
+                    <span className="qual-name">{label(s.pairId) || '—'}</span>
+                    <span className="qual-meta">
+                      {s.wins != null ? `${s.wins} thắng` : ''}
+                      {s.diff != null ? ` · hiệu số ${s.diff > 0 ? '+' : ''}${s.diff}` : ''}
+                    </span>
+                  </span>
+                  <span className={`qual-tag tier-${s.tier}`}>{seedLabel(s)}</span>
+                </div>
+              ))}
+            </div>
+            {koSeeds.some((s) => s.tier === 3) && (
+              <div className="qual-note">
+                {koSeeds.filter((s) => s.tier === 3).length} cặp hạng ba có thành tích tốt nhất được
+                vớt lên cho đủ nhánh {koSeeds.length <= 4 ? 4 : koSeeds.length <= 8 ? 8 : 16}.
+              </div>
             )}
           </div>
         )}
@@ -326,6 +455,17 @@ export default function MatchesPage() {
             {g.items.map((m, idx) => renderMatch(m, idx, g.items.length))}
           </div>
         ))}
+
+        <BracketArrange
+          open={arrangeOpen}
+          onClose={() => setArrangeOpen(false)}
+          pairIds={arrangePairIds}
+          initialSlots={currentSlots}
+          labelOf={(pid) => label(pid) || '—'}
+          seedTagOf={seedTagOf}
+          onSave={applyArrangement}
+          hasScores={koHasScores}
+        />
       </>
     )
   }
@@ -346,11 +486,18 @@ export default function MatchesPage() {
           <div className="section-title" style={{ margin: 0 }}>
             {isKnockout ? 'Nhánh loại trực tiếp' : 'Vòng tròn'} · {matches.length} trận
           </div>
-          {canEdit && (
-            <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
-              Tạo lại
-            </Button>
-          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {isKnockout && canArrange && (
+              <Button size="small" icon={<DragOutlined />} onClick={() => setArrangeOpen(true)}>
+                Tự sắp
+              </Button>
+            )}
+            {canEdit && (
+              <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
+                Tạo lại
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -360,6 +507,18 @@ export default function MatchesPage() {
           {g.items.map((m, idx) => renderMatch(m, idx, g.items.length))}
         </div>
       ))}
+
+      {isKnockout && (
+        <BracketArrange
+          open={arrangeOpen}
+          onClose={() => setArrangeOpen(false)}
+          pairIds={arrangePairIds}
+          initialSlots={currentSlots}
+          labelOf={(pid) => label(pid) || '—'}
+          onSave={applyArrangement}
+          hasScores={koHasScores}
+        />
+      )}
     </>
   )
 }
