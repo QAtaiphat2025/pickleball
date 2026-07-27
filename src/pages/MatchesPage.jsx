@@ -15,7 +15,9 @@ import {
   distributeGroups,
   groupStageComplete,
   buildKnockoutFromGroups,
+  knockoutSeeds,
   validateScore,
+  scoreRuleLabel,
   advanceWinner,
   pairLabel,
 } from '../logic'
@@ -100,7 +102,9 @@ export default function MatchesPage() {
       return
     }
     const run = () => {
-      const ko = buildKnockoutFromGroups(groups, pairs, matches, t.athletes)
+      const fillWithThirds = t.advanceThirds !== false
+      const seeds = knockoutSeeds(groups, pairs, matches, t.athletes, { fillWithThirds })
+      const ko = buildKnockoutFromGroups(groups, pairs, matches, t.athletes, { fillWithThirds })
       if (ko.length === 0) {
         message.warning('Không đủ cặp đi tiếp để tạo nhánh')
         return
@@ -110,7 +114,12 @@ export default function MatchesPage() {
         matches: [...cur.matches.filter((m) => m.stage === 'group'), ...ko],
         stage: 'knockout',
       }))
-      message.success('Đã tạo nhánh loại trực tiếp từ nhất/nhì mỗi bảng')
+      const thirds = seeds.filter((s) => s.tier === 3).length
+      message.success(
+        thirds > 0
+          ? `Đã tạo nhánh ${seeds.length} cặp: nhất + nhì mỗi bảng và ${thirds} cặp hạng ba tốt nhất`
+          : `Đã tạo nhánh ${seeds.length} cặp từ nhất/nhì mỗi bảng`,
+      )
     }
     if (hasKnockout) {
       modal.confirm({
@@ -129,7 +138,7 @@ export default function MatchesPage() {
     const d = draft[m.id] || {}
     const sa = d.a ?? m.scoreA
     const sb = d.b ?? m.scoreB
-    const v = validateScore(sa, sb)
+    const v = validateScore(sa, sb, t)
     if (!v.ok) {
       message.error(v.msg)
       return
@@ -363,7 +372,7 @@ function Header({ t }) {
       <div style={{ flex: 1 }}>
         <h1>Trận đấu</h1>
         <p className="sub">
-          {t.name} · {done}/{t.matches.length} trận đã có tỉ số
+          {t.name} · {done}/{t.matches.length} trận đã có tỉ số · {scoreRuleLabel(t)}
         </p>
       </div>
     </div>

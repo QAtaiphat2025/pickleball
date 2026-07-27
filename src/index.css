@@ -105,6 +105,111 @@ select {
   margin: 0 0 10px;
 }
 
+/* Gợi ý phương án chia bảng trong form tạo giải */
+.plan-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.plan-option {
+  appearance: none;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--nav-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.plan-option:hover {
+  border-color: var(--shell-accent);
+}
+
+.plan-option.is-on {
+  border-color: var(--shell-accent);
+  background: rgba(63, 217, 255, 0.13);
+}
+
+.plan-option-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.plan-option-sub {
+  font-size: 12px;
+  color: var(--shell-muted);
+}
+
+/* Bảng tóm tắt phương án */
+.plan-summary {
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(63, 217, 255, 0.08);
+}
+
+.plan-summary-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--shell-accent);
+  margin-bottom: 10px;
+}
+
+.plan-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.plan-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.plan-k {
+  color: var(--shell-muted);
+  flex: none;
+}
+
+.plan-v {
+  text-align: right;
+  font-weight: 600;
+}
+
+.plan-total {
+  border-top: 1px dashed var(--nav-border);
+  padding-top: 7px;
+  margin-top: 2px;
+}
+
+.plan-total .plan-v {
+  color: var(--shell-accent);
+  font-weight: 800;
+}
+
+.plan-warn {
+  margin-top: 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.32);
+}
+
 /* Bottom tab navigation — mirrors qlsx-admin mobile shell */
 .bottom-nav {
   position: fixed;
@@ -223,6 +328,186 @@ select {
   top: calc(10px + env(safe-area-inset-top));
   right: 12px;
   z-index: 70;
+}
+
+/* ---------- hướng dẫn sử dụng ---------- */
+
+/* nút "?" nổi góc dưới phải, nằm trên thanh tab */
+.guide-fab {
+  position: fixed;
+  right: 14px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  z-index: 65;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: linear-gradient(180deg, rgba(63, 217, 255, 0.28) 0%, rgba(12, 24, 48, 0.9) 100%);
+  color: var(--shell-text);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 24px rgba(1, 10, 30, 0.4), 0 0 18px rgba(95, 234, 255, 0.28);
+  transition: transform 0.15s, box-shadow 0.15s;
+  touch-action: manipulation;
+}
+
+.guide-fab:hover,
+.guide-fab:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(1, 10, 30, 0.5), 0 0 26px rgba(95, 234, 255, 0.45);
+  outline: none;
+}
+
+.guide-fab:active {
+  transform: translateY(0);
+}
+
+.guide-hero {
+  background: var(--card-surface);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.guide-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.guide-hero-sub {
+  font-size: 13px;
+  color: var(--shell-muted);
+  line-height: 1.5;
+}
+
+.guide-step {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.guide-step-rail {
+  position: relative;
+  flex: 0 0 28px;
+  display: flex;
+  justify-content: center;
+}
+
+/* đường nối dọc giữa các bước */
+.guide-step-rail::after {
+  content: '';
+  position: absolute;
+  top: 30px;
+  bottom: -16px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(101, 227, 255, 0.5), rgba(101, 227, 255, 0.08));
+}
+
+.guide-step:last-of-type .guide-step-rail::after {
+  display: none;
+}
+
+.guide-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(63, 217, 255, 0.18);
+  border: 1px solid var(--card-border);
+  color: var(--shell-accent);
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.guide-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+
+.guide-step-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guide-tab-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  background: transparent;
+  border-color: var(--card-border);
+  color: var(--shell-accent);
+}
+
+.guide-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--shell-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.guide-list li {
+  margin-bottom: 4px;
+}
+
+.guide-list li::marker {
+  color: var(--shell-accent);
+}
+
+.guide-section {
+  border-top: 1px solid rgba(145, 245, 255, 0.16);
+  padding-top: 14px;
+  margin-top: 6px;
+  margin-bottom: 14px;
+}
+
+.guide-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--shell-muted);
+  margin-bottom: 8px;
+}
+
+.guide-role {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--shell-muted);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.guide-role b {
+  color: var(--shell-text);
+}
+
+.guide-foot {
+  font-size: 12px;
+  color: var(--shell-muted);
+  line-height: 1.6;
+  background: rgba(253, 224, 71, 0.08);
+  border: 1px solid rgba(253, 224, 71, 0.28);
+  border-radius: 12px;
+  padding: 10px 12px;
 }
 
 /* hàng cặp đi tiếp trong BXH bảng */

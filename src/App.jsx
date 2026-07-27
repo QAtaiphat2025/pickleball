@@ -15,6 +15,7 @@ import PairingPage from './pages/PairingPage'
 import MatchesPage from './pages/MatchesPage'
 import StandingsPage from './pages/StandingsPage'
 import AuthControl from './components/AuthControl'
+import GuideDrawer from './components/GuideDrawer'
 import { initStore, reload, useAppStatus } from './store'
 
 const TABS = [
@@ -61,6 +62,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <AuthControl />
+      <GuideDrawer />
       {error && (
         <div
           style={{

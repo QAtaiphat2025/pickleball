@@ -119,6 +119,134 @@ export function distributeGroups(pairs, numGroups) {
   }))
 }
 
+// Số cặp mỗi bảng khi rải snake (chỉ tính số lượng, không cần cặp thật).
+export function groupSizes(numPairs, numGroups) {
+  const n = Math.max(1, Math.min(numGroups, numPairs || 1))
+  const sizes = Array.from({ length: n }, () => 0)
+  let dir = 1
+  let col = 0
+  for (let i = 0; i < numPairs; i++) {
+    sizes[col]++
+    if (dir === 1) {
+      if (col === n - 1) dir = -1
+      else col++
+    } else {
+      if (col === 0) dir = 1
+      else col--
+    }
+  }
+  return sizes
+}
+
+// Tóm tắt một phương án giải đấu: số cặp, số bảng, số trận từng vòng.
+// numAthletes: số VĐV dự kiến (2 người / cặp, lẻ 1 người sẽ bị dư).
+export function planTournament({ numAthletes, format, numGroups, advanceThirds = true }) {
+  const athletes = Math.max(0, Math.floor(Number(numAthletes) || 0))
+  const numPairs = Math.floor(athletes / 2)
+  const leftover = athletes % 2
+  const plan = {
+    numAthletes: athletes,
+    numPairs,
+    leftover,
+    format,
+    groupMatches: 0,
+    knockoutMatches: 0,
+    totalMatches: 0,
+    sizes: [],
+    qualifiers: 0,
+    thirdsUsed: 0,
+    bracketSize: 0,
+    byes: 0,
+    warnings: [],
+  }
+  if (numPairs < 2) {
+    plan.warnings.push('Cần tối thiểu 4 VĐV (2 cặp) để có trận đấu.')
+    return plan
+  }
+
+  if (format === 'round-robin') {
+    plan.groupMatches = (numPairs * (numPairs - 1)) / 2
+    plan.totalMatches = plan.groupMatches
+    return plan
+  }
+
+  if (format === 'knockout') {
+    plan.bracketSize = nextPow2(numPairs)
+    plan.byes = plan.bracketSize - numPairs
+    plan.qualifiers = numPairs
+    plan.knockoutMatches = numPairs - 1
+    plan.totalMatches = plan.knockoutMatches
+    return plan
+  }
+
+  // group-knockout
+  const n = Math.max(2, Math.min(Number(numGroups) || 2, numPairs))
+  const sizes = groupSizes(numPairs, n)
+  plan.sizes = sizes
+  plan.numGroups = sizes.length
+  plan.groupMatches = sizes.reduce((s, k) => s + (k * (k - 1)) / 2, 0)
+
+  const base = sizes.filter((k) => k >= 1).length + sizes.filter((k) => k >= 2).length
+  const thirdsAvailable = sizes.filter((k) => k >= 3).length
+  let qualifiers = base
+  let thirdsUsed = 0
+  if (advanceThirds) {
+    const need = nextPow2(base) - base
+    thirdsUsed = Math.min(need, thirdsAvailable)
+    qualifiers += thirdsUsed
+  }
+  plan.qualifiers = qualifiers
+  plan.thirdsUsed = thirdsUsed
+  plan.bracketSize = nextPow2(qualifiers)
+  plan.byes = plan.bracketSize - qualifiers
+  plan.knockoutMatches = qualifiers - 1
+  plan.totalMatches = plan.groupMatches + plan.knockoutMatches
+
+  if (sizes.some((k) => k < 2)) {
+    plan.warnings.push(`${n} bảng là quá nhiều cho ${numPairs} cặp, có bảng chỉ 1 cặp.`)
+  } else if (sizes.some((k) => k < 3)) {
+    plan.warnings.push('Có bảng chỉ 2 cặp: bảng đó không có hạng ba để vớt.')
+  }
+  if (plan.byes > 0) {
+    plan.warnings.push(
+      `${plan.qualifiers} cặp vào nhánh ${plan.bracketSize} → ${plan.byes} cặp được miễn vòng 1 (bye).`,
+    )
+  }
+  return plan
+}
+
+// Gợi ý các phương án số bảng cho số cặp cho trước.
+// Ưu tiên bảng 4–5 cặp: đủ trận để xếp hạng mà không quá dài.
+export function suggestGroupPlans(numAthletes, advanceThirds = true) {
+  const numPairs = Math.floor((Number(numAthletes) || 0) / 2)
+  const out = []
+  for (let n = 2; n <= Math.min(8, Math.floor(numPairs / 2)); n++) {
+    const plan = planTournament({
+      numAthletes,
+      format: 'group-knockout',
+      numGroups: n,
+      advanceThirds,
+    })
+    const sizes = plan.sizes
+    const min = Math.min(...sizes)
+    const max = Math.max(...sizes)
+    if (min < 2) continue
+    out.push({
+      numGroups: n,
+      sizes,
+      sizeLabel:
+        min === max ? `${n} bảng × ${min} cặp` : `${n} bảng (${sizes.join('-')} cặp)`,
+      groupMatches: plan.groupMatches,
+      knockoutMatches: plan.knockoutMatches,
+      totalMatches: plan.totalMatches,
+      qualifiers: plan.qualifiers,
+      thirdsUsed: plan.thirdsUsed,
+      recommended: min >= 3 && max <= 5,
+    })
+  }
+  return out
+}
+
 // Lịch vòng tròn cho từng bảng. Mỗi trận gắn stage:'group' + groupId.
 export function scheduleGroupStage(groups) {
   const matches = []
@@ -152,33 +280,75 @@ export function computeGroupStandings(group, pairs, matches, athletes) {
   return roundRobinStandings(pairsInGroup, groupMatches, athletes)
 }
 
-// Lấy nhất + nhì mỗi bảng. Trả { first:[pairId...], second:[pairId...] }
-// theo đúng thứ tự bảng (index).
+// Lấy nhất + nhì mỗi bảng, kèm danh sách hạng ba đã xếp theo thành tích.
+// Trả { first:[pairId...], second:[pairId...], thirds:[stat...] }
+// first/second theo đúng thứ tự bảng (index); thirds xếp tốt nhất trước.
 export function qualifiersFromGroups(groups, pairs, matches, athletes) {
   const first = []
   const second = []
-  groups.forEach((g) => {
+  const thirds = []
+  groups.forEach((g, gi) => {
     const st = computeGroupStandings(g, pairs, matches, athletes)
-    first.push(st[0] ? st[0].pairId : null)
-    second.push(st[1] ? st[1].pairId : null)
+    first.push(st[0] ? { ...st[0], groupIndex: gi } : null)
+    second.push(st[1] ? { ...st[1], groupIndex: gi } : null)
+    if (st[2]) thirds.push({ ...st[2], groupIndex: gi })
   })
-  return { first, second }
+  thirds.sort((x, y) => y.wins - x.wins || y.diff - x.diff || y.pf - x.pf)
+  return { first, second, thirds }
 }
 
-// Dựng nhánh knockout từ kết quả bảng, cross-seed cố định:
-// nhất bảng A gặp nhì bảng kế (B), nhất B gặp nhì C, ... nhất cuối gặp nhì A.
-export function buildKnockoutFromGroups(groups, pairs, matches, athletes) {
-  const { first, second } = qualifiersFromGroups(groups, pairs, matches, athletes)
-  const n = groups.length
-  const seedPairs = []
-  for (let i = 0; i < n; i++) {
-    const f = first[i]
-    const s = second[(i + 1) % n] // nhì của bảng kế tiếp (cuộn vòng)
-    if (f) seedPairs.push({ id: f })
-    if (s) seedPairs.push({ id: s })
+// So sánh thành tích 2 cặp (dùng chung cho việc xếp seed knockout)
+function byPerformance(x, y) {
+  return y.wins - x.wins || y.diff - x.diff || y.pf - x.pf
+}
+
+// Danh sách cặp đi tiếp, xếp theo seed: nhất bảng trước (mạnh nhất seed 1),
+// rồi nhì bảng, rồi các cặp hạng ba tốt nhất được vớt lên cho đủ nhánh.
+export function knockoutSeeds(groups, pairs, matches, athletes, opts = {}) {
+  const fillWithThirds = opts.fillWithThirds !== false
+  const { first, second, thirds } = qualifiersFromGroups(groups, pairs, matches, athletes)
+  const firsts = first.filter(Boolean).sort(byPerformance).map((s) => ({ ...s, tier: 1 }))
+  const seconds = second.filter(Boolean).sort(byPerformance).map((s) => ({ ...s, tier: 2 }))
+  const seeds = [...firsts, ...seconds]
+  if (fillWithThirds) {
+    const need = nextPow2(seeds.length) - seeds.length
+    thirds.slice(0, need).forEach((s) => seeds.push({ ...s, tier: 3 }))
   }
-  const ko = scheduleKnockout(seedPairs)
+  return seeds
+}
+
+// Dựng nhánh knockout từ kết quả bảng.
+// Seed chuẩn 1–N (1 gặp N, 2 gặp N-1...) nên bye luôn rơi vào seed mạnh nhất
+// và không bao giờ có trận BYE gặp BYE. Sau đó tránh cặp cùng bảng gặp lại
+// nhau ngay vòng 1 nếu còn cách đổi được.
+export function buildKnockoutFromGroups(groups, pairs, matches, athletes, opts = {}) {
+  const seeds = knockoutSeeds(groups, pairs, matches, athletes, opts)
+  const ko = scheduleKnockout(seeds.map((s) => ({ id: s.pairId })))
+  const groupOf = Object.fromEntries(seeds.map((s) => [s.pairId, s.groupIndex]))
+  avoidSameGroupRound1(ko, groupOf)
   return ko.map((m) => ({ ...m, stage: 'knockout' }))
+}
+
+// Đổi chỗ đối thủ giữa 2 trận vòng 1 để 2 cặp cùng bảng không gặp lại nhau.
+// Chỉ đụng các trận có đủ 2 cặp (trận bye giữ nguyên).
+function avoidSameGroupRound1(matches, groupOf) {
+  const r1 = matches.filter((m) => m.round === 1).sort((x, y) => x.slot - y.slot)
+  const clash = (m) => m.a && m.b && groupOf[m.a] === groupOf[m.b]
+  r1.forEach((m, i) => {
+    if (!clash(m)) return
+    for (let j = 0; j < r1.length; j++) {
+      if (j === i) continue
+      const o = r1[j]
+      if (!o.a || !o.b) continue
+      // đổi đối thủ 2 trận; chỉ nhận nếu sau khi đổi cả 2 trận đều khác bảng
+      if (groupOf[m.a] !== groupOf[o.b] && groupOf[o.a] !== groupOf[m.b]) {
+        const tmp = m.b
+        m.b = o.b
+        o.b = tmp
+        return
+      }
+    }
+  })
 }
 
 // Nhánh loại trực tiếp: seed theo thứ tự hiện có, chèn bye khi lẻ.
@@ -187,8 +357,11 @@ export function scheduleKnockout(pairs) {
   const n = pairs.length
   if (n < 2) return []
   const size = nextPow2(n)
-  const seeds = [...pairs.map((p) => p.id)]
-  while (seeds.length < size) seeds.push(null) // bye
+  // rải bye theo thứ tự seed chuẩn: 1 gặp size, 2 gặp size-1...
+  // → bye rơi vào các seed đầu, không bao giờ có 2 bye cùng 1 trận.
+  const order = seedOrder(size)
+  const ids = pairs.map((p) => p.id)
+  const seeds = order.map((s) => (s <= n ? ids[s - 1] : null))
 
   const rounds = Math.log2(size)
   const matches = []
@@ -228,6 +401,21 @@ function nextPow2(n) {
   let p = 1
   while (p < n) p *= 2
   return p
+}
+
+// Thứ tự seed chuẩn của nhánh loại trực tiếp size (size là luỹ thừa của 2).
+// vd size 8 → [1,8,4,5,2,7,3,6]: seed 1 gặp 8, seed 4 gặp 5, ...
+function seedOrder(size) {
+  let arr = [1, 2]
+  while (arr.length < size) {
+    const total = arr.length * 2 + 1
+    const next = []
+    arr.forEach((s) => {
+      next.push(s, total - s)
+    })
+    arr = next
+  }
+  return arr
 }
 
 // đẩy winner của bye tiến lên vòng sau ngay khi tạo cây
@@ -272,8 +460,30 @@ export function makeMatch(a, b, extra = {}) {
   }
 }
 
-// ---------- scoring: 11 điểm, hơn 2 ----------
-export function validateScore(scoreA, scoreB) {
+// ---------- scoring ----------
+// Luật tính điểm của giải, đặt khi tạo/sửa giải:
+//   winPoint: điểm thắng (11 / 15 / 21 / tuỳ ý)
+//   winBy2  : true  = phải cách 2 điểm (deuce kéo dài)
+//             false = chạm đúng điểm thắng là thắng, không cần cách 2
+export const DEFAULT_WIN_POINT = 11
+export const WIN_POINT_PRESETS = [11, 15, 21]
+
+// Đọc luật từ object giải, có mặc định cho giải tạo trước khi có tuỳ chọn này.
+export function scoreRules(t) {
+  const wp = Number(t?.winPoint)
+  return {
+    winPoint: Number.isInteger(wp) && wp >= 1 ? wp : DEFAULT_WIN_POINT,
+    winBy2: t?.winBy2 !== false,
+  }
+}
+
+export function scoreRuleLabel(rules) {
+  const { winPoint, winBy2 } = scoreRules(rules)
+  return winBy2 ? `${winPoint} điểm · cách 2` : `${winPoint} điểm · chạm là thắng`
+}
+
+export function validateScore(scoreA, scoreB, rules) {
+  const { winPoint, winBy2 } = scoreRules(rules)
   const a = Number(scoreA)
   const b = Number(scoreB)
   if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) {
@@ -282,14 +492,28 @@ export function validateScore(scoreA, scoreB) {
   if (a === b) return { ok: false, msg: 'Không thể hoà' }
   const hi = Math.max(a, b)
   const lo = Math.min(a, b)
-  // phải đạt tối thiểu 11
-  if (hi < 11) return { ok: false, msg: 'Bên thắng phải đạt tối thiểu 11 điểm' }
-  // hơn đúng 2 khi đã tới 11: nếu thua < 10 thì thắng phải = 11
-  if (lo <= 9 && hi !== 11) {
-    return { ok: false, msg: 'Thắng ở 11 khi đối thủ ≤ 9 (không đánh tiếp)' }
+
+  // chạm điểm thắng là thắng: bên thắng đúng winPoint, bên thua thấp hơn
+  if (!winBy2) {
+    if (hi !== winPoint) {
+      return { ok: false, msg: `Bên thắng phải đúng ${winPoint} điểm` }
+    }
+    return { ok: true }
   }
-  // deuce: từ 10-10 trở đi phải hơn đúng 2
-  if (lo >= 10 && hi - lo !== 2) {
+
+  // luật cách 2
+  if (hi < winPoint) {
+    return { ok: false, msg: `Bên thắng phải đạt tối thiểu ${winPoint} điểm` }
+  }
+  // đối thủ chưa tới (winPoint - 1) → không đánh tiếp, thắng đúng winPoint
+  if (lo <= winPoint - 2 && hi !== winPoint) {
+    return {
+      ok: false,
+      msg: `Thắng ở ${winPoint} khi đối thủ ≤ ${winPoint - 2} (không đánh tiếp)`,
+    }
+  }
+  // deuce: từ (winPoint-1) đều trở đi phải hơn đúng 2
+  if (lo >= winPoint - 1 && hi - lo !== 2) {
     return { ok: false, msg: 'Deuce: bên thắng phải hơn đúng 2 điểm' }
   }
   return { ok: true }

@@ -157,13 +157,26 @@ export async function reload() {
 }
 
 // ---- tournament helpers (giữ chữ ký cũ; giờ ghi lên Supabase) ----
-export async function createTournament({ name, format, numGroups }) {
+export async function createTournament({
+  name,
+  format,
+  numGroups,
+  winPoint,
+  winBy2,
+  numAthletes,
+  advanceThirds,
+}) {
   const id = uid('t')
   const t = {
     id,
     name: name || 'Giải mới',
     format: format || 'round-robin', // 'round-robin' | 'knockout' | 'group-knockout'
     numGroups: format === 'group-knockout' ? numGroups || 2 : null,
+    numAthletes: Number.isInteger(numAthletes) && numAthletes > 0 ? numAthletes : null,
+    // vớt các cặp hạng ba tốt nhất cho đủ nhánh knockout
+    advanceThirds: format === 'group-knockout' ? advanceThirds !== false : null,
+    winPoint: Number.isInteger(winPoint) && winPoint >= 1 ? winPoint : 11,
+    winBy2: winBy2 !== false, // true = phải cách 2 điểm
     groups: [], // [{ id, name, order, pairIds }] — chỉ dùng cho group-knockout
     stage: format === 'group-knockout' ? 'group' : null, // 'group' | 'knockout'
     createdAt: Date.now(),
