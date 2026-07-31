@@ -29,7 +29,7 @@ const STEPS = [
       'Chọn thể thức: **Vòng tròn** (mọi cặp gặp nhau 1 lần), **Loại trực tiếp** (thua là ra), hoặc **Vòng bảng + loại trực tiếp**.',
       'Nhập **số VĐV dự kiến** để app tính trước số cặp, gợi ý số bảng hợp lý và tóm tắt số trận.',
       'Chọn thể thức vòng bảng thì chọn thêm **Số bảng** (2–8) — bấm vào phương án gợi ý là nhanh nhất.',
-      'Chọn **Điểm thắng** (11 / 15 / 21 / khác) và **Luật kết thúc** (cách 2 điểm hay chạm là thắng).',
+      'Chọn **Điểm thắng** (11 / 15 / 21 / khác) và **Luật kết thúc** (cách 2, cách 2 có trần, hoặc chạm là thắng).',
       'Bấm vào thẻ giải để chọn làm giải đang thi đấu (viền sáng xanh).',
     ],
   },
@@ -235,6 +235,10 @@ export default function GuideDrawer() {
             <li>
               <b>Cách 2 điểm</b>: tới sát điểm thắng mà hoà (VD 10–10 với bàn 11) thì đánh tiếp cho
               tới khi một bên hơn đúng 2 — 12–10, 13–11, 14–12…
+            </li>
+            <li>
+              <b>Cách 2, có trần</b>: vẫn đánh cách 2 như thường, nhưng trần là điểm thắng + 4. Ví dụ bàn 11
+              chạm 15 là thắng luôn; bàn 15 chạm 19 là thắng luôn.
             </li>
             <li>
               <b>Chạm là thắng</b>: bên nào tới đúng số điểm thắng trước là thắng, không đánh deuce.

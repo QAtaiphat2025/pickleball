@@ -318,6 +318,109 @@ select {
   border: 1px solid rgba(250, 204, 21, 0.3);
 }
 
+/* Sơ đồ nhánh dự kiến trong BXH */
+.bracket-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.bracket-preview-round {
+  border: 1px solid var(--nav-border);
+  border-radius: 13px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bracket-preview-head {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--shell-accent);
+  margin-bottom: 8px;
+}
+
+.bracket-preview-matches {
+  display: grid;
+  gap: 8px;
+}
+
+.bracket-preview-match {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(145, 245, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.bracket-preview-no {
+  display: flex;
+  align-items: center;
+  color: var(--shell-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.bracket-preview-vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--shell-accent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.bracket-preview-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--nav-border);
+  background: rgba(63, 217, 255, 0.08);
+}
+
+.bracket-preview-side.is-empty {
+  align-items: center;
+  color: var(--shell-muted);
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.bracket-preview-seed {
+  color: var(--shell-accent);
+  font-size: 10.5px;
+  font-weight: 900;
+}
+
+.bracket-preview-label {
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.bracket-preview-name {
+  color: var(--shell-muted);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 479px) {
+  .bracket-preview-match {
+    grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr);
+  }
+
+  .bracket-preview-no {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Tự sắp nhánh loại trực tiếp */
 .arr-hint {
   font-size: 12.5px;

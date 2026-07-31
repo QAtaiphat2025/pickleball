@@ -20,6 +20,7 @@ import {
 import { useStore, useAuth, createTournament, updateTournament, setActive, deleteTournament } from '../store'
 import {
   WIN_POINT_PRESETS,
+  scoreRules,
   scoreRuleLabel,
   planTournament,
   suggestGroupPlans,
@@ -58,7 +59,9 @@ export default function TournamentsPage() {
   const [advanceThirds, setAdvanceThirds] = useState(true)
   const [winPoint, setWinPoint] = useState(11)
   const [winCustom, setWinCustom] = useState(false) // đang ở chế độ nhập tay điểm thắng
-  const [winBy2, setWinBy2] = useState(true)
+  const [scoreMode, setScoreMode] = useState('by2')
+  const winBy2 = scoreMode !== 'touch'
+  const capPoint = winPoint + 4
 
   const sorted = Object.values(tournaments).sort((a, b) => b.createdAt - a.createdAt)
 
@@ -81,7 +84,7 @@ export default function TournamentsPage() {
     setAdvanceThirds(true)
     setWinPoint(11)
     setWinCustom(false)
-    setWinBy2(true)
+    setScoreMode('by2')
     setOpen(true)
   }
 
@@ -95,7 +98,7 @@ export default function TournamentsPage() {
     const wp = t.winPoint || 11
     setWinPoint(wp)
     setWinCustom(!WIN_POINT_PRESETS.includes(wp))
-    setWinBy2(t.winBy2 !== false)
+    setScoreMode(scoreRules(t).mode)
     setOpen(true)
   }
 
@@ -119,6 +122,7 @@ export default function TournamentsPage() {
             numAthletes,
             advanceThirds: format === 'group-knockout' ? advanceThirds : null,
             winPoint,
+            scoreMode,
             winBy2,
           }
           if (formatChanged || groupsChanged) {
@@ -159,6 +163,7 @@ export default function TournamentsPage() {
       numAthletes,
       advanceThirds,
       winPoint,
+      scoreMode,
       winBy2,
     })
     close()
@@ -174,7 +179,7 @@ export default function TournamentsPage() {
     setAdvanceThirds(true)
     setWinPoint(11)
     setWinCustom(false)
-    setWinBy2(true)
+    setScoreMode('by2')
   }
 
   const confirmDelete = (t) => {
@@ -408,17 +413,20 @@ export default function TournamentsPage() {
             <div className="section-title">Luật kết thúc</div>
             <Segmented
               block
-              value={winBy2 ? 'by2' : 'touch'}
-              onChange={(v) => setWinBy2(v === 'by2')}
+              value={scoreMode}
+              onChange={setScoreMode}
               options={[
                 { label: 'Cách 2 điểm', value: 'by2' },
+                { label: `Cách 2, chạm ${capPoint}`, value: 'cap' },
                 { label: 'Chạm là thắng', value: 'touch' },
               ]}
             />
             <div style={{ color: 'var(--shell-muted)', fontSize: 12, marginTop: 8 }}>
-              {winBy2
+              {scoreMode === 'by2'
                 ? `Tới ${winPoint - 1}–${winPoint - 1} thì đánh tiếp cho tới khi hơn đúng 2 điểm (VD ${winPoint + 1}–${winPoint - 1}).`
-                : `Bên nào chạm ${winPoint} điểm trước là thắng, không đánh deuce.`}
+                : scoreMode === 'cap'
+                  ? `Tới ${winPoint - 1}–${winPoint - 1} thì đánh tiếp cách 2, nhưng bên nào chạm ${capPoint} điểm trước thì thắng luôn (VD ${capPoint}–${capPoint - 1}).`
+                  : `Bên nào chạm ${winPoint} điểm trước là thắng, không đánh deuce.`}
             </div>
           </div>
 
@@ -479,7 +487,7 @@ export default function TournamentsPage() {
               )}
               <div className="plan-cell">
                 <span className="plan-k">Luật điểm</span>
-                <span className="plan-v">{scoreRuleLabel({ winPoint, winBy2 })}</span>
+                <span className="plan-v">{scoreRuleLabel({ winPoint, scoreMode, winBy2 })}</span>
               </div>
               <div className="plan-cell plan-total">
                 <span className="plan-k">Tổng cộng</span>

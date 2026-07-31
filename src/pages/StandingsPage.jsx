@@ -7,6 +7,7 @@ import {
   CloseCircleOutlined,
 } from '@ant-design/icons'
 import { useActive } from '../store'
+import { buildBracketPreview, buildPlannedGroupKnockoutPreview } from '../bracketPreview'
 import {
   roundRobinStandings,
   knockoutResults,
@@ -198,6 +199,52 @@ function QualifierList({ t, seeds, labelOf }) {
   )
 }
 
+function BracketPreviewView({ rounds }) {
+  if (!rounds || rounds.length === 0) return null
+  return (
+    <div className="glass-card">
+      <div className="section-title">
+        <ApartmentOutlined style={{ marginRight: 6, color: 'var(--shell-accent)' }} />
+        Nhánh loại trực tiếp dự kiến
+      </div>
+      <div className="bracket-preview">
+        {rounds.map((round) => (
+          <div key={round.round} className="bracket-preview-round">
+            <div className="bracket-preview-head">{round.name}</div>
+            <div className="bracket-preview-matches">
+              {round.matches.map((m) => (
+                <div key={m.no} className="bracket-preview-match">
+                  <div className="bracket-preview-no">Trận {m.no}</div>
+                  <PreviewSide side={m.a} />
+                  <div className="bracket-preview-vs">VS</div>
+                  <PreviewSide side={m.b} emptyLabel={m.a ? 'Miễn vòng' : 'Chờ'} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="qual-note">
+        Nhánh này tính theo seed hiện tại: các cặp nhất bảng xếp trước, rồi nhì bảng, rồi hạng ba
+        được vớt nếu có.
+      </div>
+    </div>
+  )
+}
+
+function PreviewSide({ side, emptyLabel = 'Chờ' }) {
+  if (!side) {
+    return <div className="bracket-preview-side is-empty">{emptyLabel}</div>
+  }
+  return (
+    <div className="bracket-preview-side">
+      {side.seedNo && <span className="bracket-preview-seed">#{side.seedNo}</span>}
+      <span className="bracket-preview-label">{side.label}</span>
+      {side.name && <span className="bracket-preview-name">{side.name}</span>}
+    </div>
+  )
+}
+
 // Tiến trình nhánh: mỗi vòng ai đi tiếp, ai bị loại
 function KnockoutProgressView({ koMatches, labelOf }) {
   const rounds = knockoutProgress(koMatches)
@@ -287,6 +334,25 @@ function GroupKnockoutView({ t }) {
             fillWithThirds: t.advanceThirds !== false,
           }).filter((s) => koMatches.some((m) => m.a === s.pairId || m.b === s.pairId))
         : []
+  const liveSeeds =
+    seeds.length > 0
+      ? seeds
+      : groupDone
+        ? knockoutSeeds(groups, t.pairs, t.matches, t.athletes, {
+            fillWithThirds: t.advanceThirds !== false,
+          })
+        : []
+  const previewRounds =
+    liveSeeds.length > 0
+      ? buildBracketPreview(
+          liveSeeds.map((s, i) => ({
+            seedNo: i + 1,
+            label: seedLabel(s),
+            name: labelOf(s.pairId),
+            groupIndex: s.groupIndex,
+          })),
+        )
+      : buildPlannedGroupKnockoutPreview(groups, t.advanceThirds !== false)
 
   // số cặp đi tiếp mỗi bảng để tô sáng đúng (2, hoặc 3 nếu bảng đó có suất vớt)
   const qualifyIn = (g) => {
@@ -308,9 +374,6 @@ function GroupKnockoutView({ t }) {
           <div className="empty-hint">Nhánh knockout chưa xong — nhập đủ tỉ số để chốt thứ hạng.</div>
         </div>
       )}
-
-      {hasKnockout && <KnockoutProgressView koMatches={koMatches} labelOf={labelOf} />}
-      <QualifierList t={t} seeds={seeds} labelOf={labelOf} />
 
       {groups.map((g) => {
         const rows = computeGroupStandings(g, t.pairs, t.matches, t.athletes)
@@ -341,6 +404,10 @@ function GroupKnockoutView({ t }) {
           </div>
         </div>
       )}
+
+      <QualifierList t={t} seeds={seeds} labelOf={labelOf} />
+      <BracketPreviewView rounds={previewRounds} />
+      {hasKnockout && <KnockoutProgressView koMatches={koMatches} labelOf={labelOf} />}
     </>
   )
 }

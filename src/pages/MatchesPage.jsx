@@ -11,7 +11,10 @@ import {
 } from '@ant-design/icons'
 import { useActive, useAuth, updateTournament } from '../store'
 import BracketArrange from '../components/BracketArrange'
+import { buildPlannedGroupKnockoutPreview } from '../bracketPreview'
 import { buildManualGroups, validateManualGroupAssignments } from '../manualGroups'
+import { knockoutPlaceholderLabel } from '../knockoutPlaceholders'
+import { scoreDraftChanged } from '../scoreDraft'
 import {
   scheduleRoundRobin,
   scheduleKnockout,
@@ -324,11 +327,14 @@ export default function MatchesPage() {
   const renderMatch = (m, idx, count) => {
     const done = m.scoreA != null && m.scoreB != null
     const d = draft[m.id] || {}
+    const scoreChanged = scoreDraftChanged(m, d)
     const bothPresent = m.a && m.b
     // chỉ vòng knockout đầu tiên mới ghi "Nhất A / Nhì B" — vòng sau là người thắng
     const showSeed = m.stage === 'knockout' && m.round === firstKoRound
     const seedA = showSeed ? seedTagOf[m.a] : null
     const seedB = showSeed ? seedTagOf[m.b] : null
+    const placeholderA = knockoutPlaceholderLabel(m, 0, matches)
+    const placeholderB = knockoutPlaceholderLabel(m, 1, matches)
     return (
       <div
         key={m.id}
@@ -341,14 +347,14 @@ export default function MatchesPage() {
           <span style={{ flex: 1 }}>
             {seedA && <span className="seed-tag">{seedA}</span>}
             <span style={{ fontWeight: 700, display: 'block' }}>
-              {label(m.a) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+              {label(m.a) || placeholderA || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
             </span>
           </span>
           <span className="vs-chip">VS</span>
           <span style={{ flex: 1, textAlign: 'right' }}>
             {seedB && <span className="seed-tag">{seedB}</span>}
             <span style={{ fontWeight: 700, display: 'block' }}>
-              {label(m.b) || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
+              {label(m.b) || placeholderB || <i style={{ color: 'var(--shell-muted)' }}>chờ…</i>}
             </span>
           </span>
         </div>
@@ -373,7 +379,7 @@ export default function MatchesPage() {
                 onChange={(v) => setDraftVal(m.id, 'b', v)}
                 style={{ flex: 1 }}
               />
-              <Button type="primary" onClick={() => saveScore(m)}>
+              <Button type={scoreChanged ? 'primary' : 'default'} disabled={!scoreChanged} onClick={() => saveScore(m)}>
                 Lưu
               </Button>
             </div>
@@ -383,7 +389,9 @@ export default function MatchesPage() {
             </div>
           )
         ) : (
-          <div style={{ fontSize: 12, color: 'var(--shell-muted)' }}>Chờ kết quả vòng trước</div>
+          <div style={{ fontSize: 12, color: 'var(--shell-muted)' }}>
+            Chờ kết quả {placeholderA || placeholderB ? 'các trận nguồn' : 'vòng trước'}
+          </div>
         )}
 
         {done && (
@@ -405,6 +413,9 @@ export default function MatchesPage() {
     const koRounds = [...new Set(koMatches.map((m) => m.round))]
       .sort((a, b) => a - b)
       .map((r) => ({ round: r, items: koMatches.filter((m) => m.round === r) }))
+    const plannedKoRounds = hasKnockout
+      ? []
+      : buildPlannedGroupKnockoutPreview(groups, t.advanceThirds !== false)
 
     return (
       <>
@@ -444,6 +455,8 @@ export default function MatchesPage() {
             </div>
           )
         })}
+
+        <PlannedKnockoutPreview rounds={plannedKoRounds} />
 
         {/* chốt vòng bảng → tạo nhánh */}
         {(canEdit || !groupDone) && (
@@ -697,6 +710,52 @@ function ManualGroupsModal({ open, onClose, pairs, groups, numGroups, labelOf, o
         </div>
       </div>
     </Modal>
+  )
+}
+
+function PlannedKnockoutPreview({ rounds }) {
+  if (!rounds || rounds.length === 0) return null
+  return (
+    <div className="glass-card">
+      <div className="section-title">
+        <ApartmentOutlined style={{ marginRight: 6, color: 'var(--shell-accent)' }} />
+        Nhánh loại trực tiếp dự kiến
+      </div>
+      <div className="bracket-preview">
+        {rounds.map((round) => (
+          <div key={round.round} className="bracket-preview-round">
+            <div className="bracket-preview-head">{round.name}</div>
+            <div className="bracket-preview-matches">
+              {round.matches.map((m) => (
+                <div key={m.no} className="bracket-preview-match">
+                  <div className="bracket-preview-no">Trận {m.no}</div>
+                  <PreviewEntrant entrant={m.a} />
+                  <div className="bracket-preview-vs">VS</div>
+                  <PreviewEntrant entrant={m.b} emptyLabel={m.a ? 'Miễn vòng' : 'Chờ'} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="qual-note">
+        Đây là nhánh dự kiến theo suất nhất/nhì từng bảng. Sau khi nhập đủ tỉ số, app sẽ chốt
+        cặp thực tế theo BXH.
+      </div>
+    </div>
+  )
+}
+
+function PreviewEntrant({ entrant, emptyLabel = 'Chờ' }) {
+  if (!entrant) {
+    return <div className="bracket-preview-side is-empty">{emptyLabel}</div>
+  }
+  return (
+    <div className="bracket-preview-side">
+      {entrant.seedNo && <span className="bracket-preview-seed">#{entrant.seedNo}</span>}
+      <span className="bracket-preview-label">{entrant.label}</span>
+      {entrant.name && <span className="bracket-preview-name">{entrant.name}</span>}
+    </div>
   )
 }
 

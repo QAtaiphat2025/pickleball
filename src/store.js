@@ -162,6 +162,7 @@ export async function createTournament({
   format,
   numGroups,
   winPoint,
+  scoreMode,
   winBy2,
   numAthletes,
   advanceThirds,
@@ -176,6 +177,12 @@ export async function createTournament({
     // vớt các cặp hạng ba tốt nhất cho đủ nhánh knockout
     advanceThirds: format === 'group-knockout' ? advanceThirds !== false : null,
     winPoint: Number.isInteger(winPoint) && winPoint >= 1 ? winPoint : 11,
+    scoreMode:
+      scoreMode === 'touch' || scoreMode === 'cap' || scoreMode === 'by2'
+        ? scoreMode
+        : winBy2 === false
+          ? 'touch'
+          : 'by2',
     winBy2: winBy2 !== false, // true = phải cách 2 điểm
     groups: [], // [{ id, name, order, pairIds }] — chỉ dùng cho group-knockout
     stage: format === 'group-knockout' ? 'group' : null, // 'group' | 'knockout'

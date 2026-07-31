@@ -1,4 +1,12 @@
 import { uid } from './store'
+import { buildGroupCrossSlots } from './bracketPreview'
+export {
+  DEFAULT_WIN_POINT,
+  WIN_POINT_PRESETS,
+  scoreRules,
+  scoreRuleLabel,
+  validateScore,
+} from './scoreRules'
 
 // ---------- utils ----------
 export function shuffle(arr) {
@@ -330,6 +338,13 @@ export function knockoutSeeds(groups, pairs, matches, athletes, opts = {}) {
 // nhau ngay vòng 1 nếu còn cách đổi được.
 export function buildKnockoutFromGroups(groups, pairs, matches, athletes, opts = {}) {
   const seeds = knockoutSeeds(groups, pairs, matches, athletes, opts)
+  const crossSlots = buildGroupCrossSlots(seeds)
+  if (crossSlots) {
+    return scheduleKnockoutFromSlots(crossSlots.map((s) => s.pairId)).map((m) => ({
+      ...m,
+      stage: 'knockout',
+    }))
+  }
   const ko = scheduleKnockout(seeds.map((s) => ({ id: s.pairId })))
   const groupOf = Object.fromEntries(seeds.map((s) => [s.pairId, s.groupIndex]))
   avoidSameGroupRound1(ko, groupOf)
@@ -415,11 +430,13 @@ function buildTreeFromSeeds(seeds) {
   let prev = roundSlots
   for (let r = 2; r <= rounds; r++) {
     const cur = []
-    for (let i = 0; i < prev.length; i += 2) {
+    const sources =
+      prev.length === 4 ? [prev[0], prev[2], prev[1], prev[3]] : prev
+    for (let i = 0; i < sources.length; i += 2) {
       const m = makeMatch(null, null, {
         round: r,
         slot: i / 2,
-        feeds: [prev[i].id, prev[i + 1].id],
+        feeds: [sources[i].id, sources[i + 1].id],
       })
       matches.push(m)
       cur.push(m)
@@ -559,65 +576,6 @@ export function makeMatch(a, b, extra = {}) {
     winner: null, // pairId
     ...extra,
   }
-}
-
-// ---------- scoring ----------
-// Luật tính điểm của giải, đặt khi tạo/sửa giải:
-//   winPoint: điểm thắng (11 / 15 / 21 / tuỳ ý)
-//   winBy2  : true  = phải cách 2 điểm (deuce kéo dài)
-//             false = chạm đúng điểm thắng là thắng, không cần cách 2
-export const DEFAULT_WIN_POINT = 11
-export const WIN_POINT_PRESETS = [11, 15, 21]
-
-// Đọc luật từ object giải, có mặc định cho giải tạo trước khi có tuỳ chọn này.
-export function scoreRules(t) {
-  const wp = Number(t?.winPoint)
-  return {
-    winPoint: Number.isInteger(wp) && wp >= 1 ? wp : DEFAULT_WIN_POINT,
-    winBy2: t?.winBy2 !== false,
-  }
-}
-
-export function scoreRuleLabel(rules) {
-  const { winPoint, winBy2 } = scoreRules(rules)
-  return winBy2 ? `${winPoint} điểm · cách 2` : `${winPoint} điểm · chạm là thắng`
-}
-
-export function validateScore(scoreA, scoreB, rules) {
-  const { winPoint, winBy2 } = scoreRules(rules)
-  const a = Number(scoreA)
-  const b = Number(scoreB)
-  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) {
-    return { ok: false, msg: 'Tỉ số phải là số nguyên ≥ 0' }
-  }
-  if (a === b) return { ok: false, msg: 'Không thể hoà' }
-  const hi = Math.max(a, b)
-  const lo = Math.min(a, b)
-
-  // chạm điểm thắng là thắng: bên thắng đúng winPoint, bên thua thấp hơn
-  if (!winBy2) {
-    if (hi !== winPoint) {
-      return { ok: false, msg: `Bên thắng phải đúng ${winPoint} điểm` }
-    }
-    return { ok: true }
-  }
-
-  // luật cách 2
-  if (hi < winPoint) {
-    return { ok: false, msg: `Bên thắng phải đạt tối thiểu ${winPoint} điểm` }
-  }
-  // đối thủ chưa tới (winPoint - 1) → không đánh tiếp, thắng đúng winPoint
-  if (lo <= winPoint - 2 && hi !== winPoint) {
-    return {
-      ok: false,
-      msg: `Thắng ở ${winPoint} khi đối thủ ≤ ${winPoint - 2} (không đánh tiếp)`,
-    }
-  }
-  // deuce: từ (winPoint-1) đều trở đi phải hơn đúng 2
-  if (lo >= winPoint - 1 && hi - lo !== 2) {
-    return { ok: false, msg: 'Deuce: bên thắng phải hơn đúng 2 điểm' }
-  }
-  return { ok: true }
 }
 
 export function winnerOf(match) {
