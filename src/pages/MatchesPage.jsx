@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Button, Empty, App as AntApp, InputNumber, Tag } from 'antd'
+import { useEffect, useState } from 'react'
+import { Button, Empty, App as AntApp, InputNumber, Modal, Select, Tag } from 'antd'
 import {
   ScheduleOutlined,
   ThunderboltOutlined,
@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import { useActive, useAuth, updateTournament } from '../store'
 import BracketArrange from '../components/BracketArrange'
+import { buildManualGroups, validateManualGroupAssignments } from '../manualGroups'
 import {
   scheduleRoundRobin,
   scheduleKnockout,
@@ -36,6 +37,7 @@ export default function MatchesPage() {
   const t = useActive()
   const [draft, setDraft] = useState({}) // matchId -> {a,b}
   const [arrangeOpen, setArrangeOpen] = useState(false)
+  const [manualGroupsOpen, setManualGroupsOpen] = useState(false)
   const canEdit = useAuth().unlocked
 
   if (!t) {
@@ -157,6 +159,42 @@ export default function MatchesPage() {
     }
   }
 
+  const applyManualGroups = (assignments) => {
+    const n = t.numGroups || 2
+    const validation = validateManualGroupAssignments(pairs, n, assignments)
+    if (!validation.ok) {
+      message.warning(validation.msg)
+      return
+    }
+
+    const run = () => {
+      const gs = buildManualGroups(pairs, n, assignments)
+      const ms = scheduleGroupStage(gs)
+      updateTournament(t.id, (cur) => ({
+        ...cur,
+        groups: gs,
+        matches: ms,
+        scheduled: true,
+        stage: 'group',
+        koSeeds: [],
+      }))
+      message.success(`Đã tự chia ${gs.length} bảng · ${ms.length} trận vòng bảng`)
+      setManualGroupsOpen(false)
+    }
+
+    if (matches.length) {
+      modal.confirm({
+        title: 'Chia lại bảng?',
+        content: 'Toàn bộ lịch, tỉ số vòng bảng và nhánh knockout hiện tại sẽ bị xoá.',
+        okText: 'Chia lại',
+        cancelText: 'Huỷ',
+        onOk: run,
+      })
+    } else {
+      run()
+    }
+  }
+
   const buildBracket = () => {
     if (!groupStageComplete(matches)) {
       message.warning('Cần nhập đủ tỉ số toàn bộ trận vòng bảng')
@@ -253,9 +291,29 @@ export default function MatchesPage() {
             Thể thức: <b>{formatDesc}</b>
           </div>
           {canEdit && (
-            <Button type="primary" icon={<ThunderboltOutlined />} onClick={genSchedule} block>
-              Tạo lịch thi đấu ({pairs.length} cặp)
-            </Button>
+            isGroupKO ? (
+              <div className="stack">
+                <Button type="primary" icon={<ThunderboltOutlined />} onClick={genSchedule} block>
+                  Chia tự động ({pairs.length} cặp)
+                </Button>
+                <Button icon={<ApartmentOutlined />} onClick={() => setManualGroupsOpen(true)} block>
+                  Tự chia bảng
+                </Button>
+                <ManualGroupsModal
+                  open={manualGroupsOpen}
+                  onClose={() => setManualGroupsOpen(false)}
+                  pairs={pairs}
+                  groups={groups}
+                  numGroups={t.numGroups || 2}
+                  labelOf={(pid) => label(pid) || '—'}
+                  onSave={applyManualGroups}
+                />
+              </div>
+            ) : (
+              <Button type="primary" icon={<ThunderboltOutlined />} onClick={genSchedule} block>
+                Tạo lịch thi đấu ({pairs.length} cặp)
+              </Button>
+            )
           )}
         </div>
       </>
@@ -357,9 +415,14 @@ export default function MatchesPage() {
               Vòng bảng · {groups.length} bảng · {groupMatches.length} trận
             </div>
             {canEdit && (
-              <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
-                Chia lại
-              </Button>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <Button size="small" icon={<ReloadOutlined />} onClick={genSchedule}>
+                  Chia tự động
+                </Button>
+                <Button size="small" icon={<ApartmentOutlined />} onClick={() => setManualGroupsOpen(true)}>
+                  Tự chia
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -466,6 +529,15 @@ export default function MatchesPage() {
           onSave={applyArrangement}
           hasScores={koHasScores}
         />
+        <ManualGroupsModal
+          open={manualGroupsOpen}
+          onClose={() => setManualGroupsOpen(false)}
+          pairs={pairs}
+          groups={groups}
+          numGroups={t.numGroups || 2}
+          labelOf={(pid) => label(pid) || '—'}
+          onSave={applyManualGroups}
+        />
       </>
     )
   }
@@ -520,6 +592,111 @@ export default function MatchesPage() {
         />
       )}
     </>
+  )
+}
+
+const MANUAL_GROUP_NAMES = 'ABCDEFGH'.split('')
+
+function manualGroupName(index) {
+  return MANUAL_GROUP_NAMES[index] || `${index + 1}`
+}
+
+function defaultAssignments(pairs, groups, numGroups) {
+  const fromCurrentGroups = {}
+  groups.forEach((g, gi) => {
+    ;(g.pairIds || []).forEach((pid) => {
+      fromCurrentGroups[pid] = gi
+    })
+  })
+  if (Object.keys(fromCurrentGroups).length > 0) return fromCurrentGroups
+
+  const n = Math.max(1, Math.floor(Number(numGroups) || 1))
+  const assignments = {}
+  let dir = 1
+  let col = 0
+  pairs.forEach((p) => {
+    assignments[p.id] = col
+    if (dir === 1) {
+      if (col === n - 1) dir = -1
+      else col++
+    } else {
+      if (col === 0) dir = 1
+      else col--
+    }
+  })
+  return assignments
+}
+
+function ManualGroupsModal({ open, onClose, pairs, groups, numGroups, labelOf, onSave }) {
+  const [assignments, setAssignments] = useState({})
+  const n = Math.max(1, Math.floor(Number(numGroups) || 1))
+  const groupOptions = Array.from({ length: n }, (_, i) => ({
+    label: `Bảng ${manualGroupName(i)}`,
+    value: i,
+  }))
+
+  useEffect(() => {
+    if (open) setAssignments(defaultAssignments(pairs, groups, n))
+  }, [open, pairs, groups, n])
+
+  const counts = Array.from({ length: n }, () => 0)
+  pairs.forEach((p) => {
+    const gi = assignments[p.id]
+    if (Number.isInteger(gi) && gi >= 0 && gi < n) counts[gi]++
+  })
+
+  const setGroup = (pairId, groupIndex) => {
+    setAssignments((prev) => ({ ...prev, [pairId]: groupIndex }))
+  }
+
+  const resetAuto = () => {
+    setAssignments(defaultAssignments(pairs, [], n))
+  }
+
+  return (
+    <Modal
+      title="Tự chia bảng"
+      open={open}
+      onOk={() => onSave(assignments)}
+      onCancel={onClose}
+      okText="Tạo lịch từ bảng đã chia"
+      cancelText="Huỷ"
+      width={720}
+    >
+      <div className="stack" style={{ marginTop: 12 }}>
+        <div className="arr-hint">
+          Chọn bảng cho từng cặp. Mỗi bảng cần ít nhất 2 cặp để có trận vòng bảng.
+        </div>
+
+        <div className="manual-group-summary">
+          {counts.map((count, i) => (
+            <div key={i} className={`manual-group-count${count < 2 ? ' is-warn' : ''}`}>
+              <span>Bảng {manualGroupName(i)}</span>
+              <b>{count} cặp</b>
+            </div>
+          ))}
+        </div>
+
+        <Button onClick={resetAuto} icon={<ReloadOutlined />} block>
+          Gợi ý chia đều tự động
+        </Button>
+
+        <div className="manual-group-list">
+          {pairs.map((p, i) => (
+            <div key={p.id} className="manual-group-row">
+              <span className="manual-group-index">#{i + 1}</span>
+              <span className="manual-group-name">{labelOf(p.id)}</span>
+              <Select
+                value={assignments[p.id]}
+                onChange={(v) => setGroup(p.id, v)}
+                options={groupOptions}
+                style={{ width: 120 }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
